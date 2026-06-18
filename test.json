@@ -1,0 +1,8 @@
+{
+"notifications": {
+"on_due_date": true
+},
+"display": {
+"default_view": "kanban"
+}
+}
