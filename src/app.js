@@ -20,7 +20,7 @@ const app = express();
 
 // -- Security ----------------------------
 app.use(helmet());
-app.use(cors({ origin: "http://localhost:3001", credentials: true }));
+app.use(cors({ origin: true, credentials: true }));
 app.use(
   rateLimit({
     windowMs: 15 * 60 * 1000,

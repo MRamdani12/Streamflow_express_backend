@@ -1,5 +1,6 @@
 const zValidate = (schema, data, res) => {
   const validation = schema.safeParse(data);
+  console.log(validation);
 
   if (!validation.success) {
     res.status(400).json({

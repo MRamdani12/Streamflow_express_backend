@@ -11,13 +11,13 @@ const JWT_EXPIRES_IN = 15 * 60; // 15 minutes
 const ACCESS_TOKEN_COOKIE_OPTIONS = {
   httpOnly: true,
   secure: false,
-  sameSite: "strict",
+  sameSite: "lax",
   maxAge: FIFTEEN_MINUTES_IN_MILISECONDS,
 };
 const REFRESH_TOKEN_COOKIE_OPTIONS = {
   httpOnly: true,
   secure: false,
-  sameSite: "strict",
+  sameSite: "lax",
   maxAge: SEVEN_DAYS_IN_MILISECONDS,
 };
 
@@ -99,6 +99,162 @@ const login = async (req, res) => {
       error: "internal_server_error",
       message: "Internal Server Error",
     });
+  }
+};
+
+const googleLogin = async (req, res) => {
+  // Generate random hex as a state to protect againts CSRF attack
+  const state = crypto.randomBytes(16).toString("hex");
+
+  res.cookie("oauth_state", state, {
+    httpOnly: true,
+    secure: false,
+    sameSite: "lax",
+    maxAge: 5 * 60 * 1000,
+  });
+
+  const params = new URLSearchParams({
+    client_id: process.env.GOOGLE_CLIENT_ID,
+    redirect_uri: process.env.GOOGLE_REDIRECT_URI,
+    response_type: "code",
+    scope: "openid email profile",
+    state: state,
+    access_type: "online",
+  });
+
+  res.redirect(
+    "https://accounts.google.com/o/oauth2/v2/auth?" + params.toString(),
+  );
+};
+
+const googleCallback = async (req, res) => {
+  const { code, state, error } = req.query;
+
+  if (error) {
+    return res.redirect("http://localhost:3001" + "/login");
+  }
+
+  const storedState = req.cookies?.oauth_state;
+  if (!state || state !== storedState) {
+    return res.status(403).json({
+      error: "forbidden",
+      message: "State mismatch",
+    });
+  }
+
+  res.clearCookie("oauth_state", {
+    httpOnly: true,
+    secure: false,
+    sameSite: "lax",
+    maxAge: 5 * 60 * 1000,
+  });
+
+  try {
+    const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        code,
+        client_id: process.env.GOOGLE_CLIENT_ID,
+        client_secret: process.env.GOOGLE_CLIENT_SECRET,
+        redirect_uri: process.env.GOOGLE_REDIRECT_URI,
+        grant_type: "authorization_code",
+      }),
+    });
+
+    const tokens = await tokenResponse.json();
+
+    if (tokens.error) {
+      throw new Error(tokens.error_description || tokens.error);
+    }
+
+    console.log(tokens);
+
+    const userResponse = await fetch(
+      "https://www.googleapis.com/oauth2/v3/userinfo",
+      {
+        headers: { Authorization: `Bearer ${tokens.access_token}` },
+      },
+    );
+
+    const googleUser = await userResponse.json();
+
+    const existingUser = await pool.query(
+      `
+        SELECT id FROM users WHERE email = $1
+      `,
+      [googleUser.email],
+    );
+
+    let userId;
+
+    if (existingUser.rows.length === 0) {
+      const newUser = await pool.query(
+        `
+        INSERT INTO users (name, email)
+        VALUES ($1, $2)
+        RETURNING id
+      `,
+        [googleUser.name, googleUser.email],
+      );
+
+      userId = newUser.rows[0].id;
+      console.log(newUser.rows[0]);
+    } else {
+      userId = existingUser.rows[0].id;
+    }
+
+    const existingIdentities = await pool.query(
+      `
+        SELECT EXISTS(SELECT 1 FROM identities WHERE user_id = $1 AND provider = 'google' AND provider_id = $3)
+      `,
+      [userId, googleUser.sub],
+    );
+
+    if (!existingIdentities.rows[0].exists) {
+      await pool.query(
+        `
+            INSERT INTO identities (user_id, provider, provider_id)
+            VALUES ($1, 'google', $2)
+          `,
+        [userId, googleUser.sub],
+      );
+    }
+
+    const accessToken = jwt.sign(
+      {
+        user_id: userId,
+        name: googleUser.name,
+        email: googleUser.email,
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: JWT_EXPIRES_IN },
+    );
+
+    const refreshToken = crypto.randomBytes(40).toString("hex");
+    const refreshTokenHash = crypto
+      .createHash("sha256")
+      .update(refreshToken)
+      .digest("hex");
+
+    await pool.query(
+      `
+            INSERT INTO refresh_tokens (
+              token_hash,
+              user_id,
+              expires_at
+            ) VALUES ($1, $2, CURRENT_TIMESTAMP + INTERVAL '7 days')
+          `,
+      [refreshTokenHash, userId],
+    );
+
+    return res
+      .cookie("accessToken", accessToken, ACCESS_TOKEN_COOKIE_OPTIONS)
+      .cookie("refreshToken", refreshToken, REFRESH_TOKEN_COOKIE_OPTIONS)
+      .redirect("http://localhost:3001" + "/app/projects");
+  } catch (error) {
+    console.log(`Google OAuth error: ${error}`);
+    return res.redirect("http://localhost:3001" + "/login");
   }
 };
 
@@ -333,6 +489,8 @@ const me = async (req, res) => {
 
 module.exports = {
   login,
+  googleLogin,
+  googleCallback,
   register,
   logout,
   refreshToken,

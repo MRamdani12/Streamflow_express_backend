@@ -9,7 +9,7 @@ const addProjectSchema = z.object({
     .string({ message: "Name can't be empty" })
     .min(1, { message: "Name must at least contain 1 character" }),
   description: z.string().nullable().optional(),
-  due_date: z.string().datetime({ offset: true }).nullable().optional(),
+  due_date: z.string().date().nullable().optional(),
 });
 
 const updateProjectSchema = z.object({
@@ -18,7 +18,7 @@ const updateProjectSchema = z.object({
     .min(1, { message: "Name must at least contain 1 character" }),
   description: z.string().nullable().optional(),
   status: projectStatus,
-  due_date: z.string().datetime({ offset: true }).nullable().optional(),
+  due_date: z.string().date().nullable().optional(),
 });
 
 module.exports = {

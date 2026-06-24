@@ -9,6 +9,11 @@ router.post("/register", authController.register);
 router.post("/logout", authController.logout);
 router.post("/refresh-token", authController.refreshToken);
 
+// OAuth 2.0
+// Google
+router.get("/google", authController.googleLogin);
+router.get("/google/callback", authController.googleCallback);
+
 // Need to authenticate access token first before accessing user info
 router.get("/me", authenticateAccessToken, authController.me);
 
