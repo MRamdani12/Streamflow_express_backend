@@ -23,14 +23,6 @@ A full-stack task management application built with Node.js, Express, and Postgr
 
 ---
 
-## Getting Started
-
-### Prerequisites
-
-- Node.js v18+
-- PostgreSQL
-- npm
-
 ## Environment Variables
 
 See `.env.example` for all required variables.
