@@ -258,6 +258,19 @@ const googleCallback = async (req, res) => {
   }
 };
 
+const githubLogin = async (req, res) => {
+  const state = crypto.randomBytes(16).toString("hex");
+
+  const codeVerifier = crypto.randomBytes(32).toString("base64url");
+
+  const params = new URLSearchParams({
+    client_id: process.env.GITHUB_CLIENT_ID,
+    redirect_uri: process.env.GITHUB_REDIRECT_URI,
+  });
+};
+
+const githubCallback = async (req, res) => {};
+
 const register = async (req, res) => {
   const validation = zValidate(registerSchema, req.body, res);
 
@@ -491,6 +504,8 @@ module.exports = {
   login,
   googleLogin,
   googleCallback,
+  githubLogin,
+  githubCallback,
   register,
   logout,
   refreshToken,

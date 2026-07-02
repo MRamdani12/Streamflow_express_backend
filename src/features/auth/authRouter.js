@@ -14,6 +14,10 @@ router.post("/refresh-token", authController.refreshToken);
 router.get("/google", authController.googleLogin);
 router.get("/google/callback", authController.googleCallback);
 
+//Github
+router.get("/github", authController.githubLogin);
+router.get("/github/callback", authController.githubCallback);
+
 // Need to authenticate access token first before accessing user info
 router.get("/me", authenticateAccessToken, authController.me);
 
